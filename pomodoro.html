@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍅 番茄钟</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --text: #e0e0e0;
+    --text2: #a0a0b8;
+    --accent: #e94560;
+    --accent2: #ff6b6b;
+    --green: #4ecdc4;
+    --green2: #2ecc71;
+    --gold: #f0c040;
+    --radius: 16px;
+    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .app {
+    width: 420px;
+    background: var(--surface);
+    border-radius: 24px;
+    padding: 32px 28px 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  /* ── Timer Ring ── */
+  .timer-ring-container {
+    position: relative;
+    width: 260px;
+    height: 260px;
+  }
+
+  .timer-ring {
+    transform: rotate(-90deg);
+    width: 260px;
+    height: 260px;
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: var(--surface2);
+    stroke-width: 10;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.5s linear, stroke 0.5s ease;
+  }
+
+  .ring-progress.break {
+    stroke: var(--green);
+  }
+
+  .ring-progress.long-break {
+    stroke: var(--gold);
+  }
+
+  .timer-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .timer-time {
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    font-variant-numeric: tabular-nums;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  }
+
+  .timer-label {
+    font-size: 14px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-weight: 500;
+  }
+
+  .pomodoro-count {
+    font-size: 12px;
+    color: var(--text2);
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .pomodoro-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--surface2);
+    transition: background 0.3s;
+  }
+
+  .pomodoro-dot.done {
+    background: var(--accent);
+  }
+
+  .pomodoro-dot.current {
+    background: var(--accent2);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* ── Controls ── */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn {
+    border: none;
+    border-radius: 50px;
+    padding: 10px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-family: inherit;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn:active {
+    transform: scale(0.95);
+  }
+
+  .btn-start {
+    background: var(--accent);
+    color: #fff;
+    padding: 14px 40px;
+    font-size: 17px;
+    box-shadow: 0 4px 20px rgba(233,69,96,0.4);
+  }
+  .btn-start:hover {
+    box-shadow: 0 6px 28px rgba(233,69,96,0.6);
+    transform: translateY(-1px);
+  }
+  .btn-start.running {
+    background: var(--gold);
+    box-shadow: 0 4px 20px rgba(240,192,64,0.4);
+    color: #1a1a2e;
+  }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+  .btn-secondary:hover {
+    background: #1a4080;
+  }
+
+  .btn-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 4px;
+    width: 100%;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text2);
+    transition: all var(--transition);
+    border: none;
+    background: transparent;
+    font-family: inherit;
+  }
+
+  .tab.active {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .tab:hover:not(.active) {
+    color: var(--text);
+  }
+
+  /* ── Panels ── */
+  .panel {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .panel.active {
+    display: flex;
+  }
+
+  /* ── Task List ── */
+  .task-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .task-input-row input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--surface2);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition);
+  }
+
+  .task-input-row input:focus {
+    border-color: var(--accent);
+  }
+
+  .task-input-row input::placeholder {
+    color: #555;
+  }
+
+  .task-estimate {
+    width: 48px;
+    text-align: center;
+  }
+
+  .task-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  .task-list::-webkit-scrollbar {
+    width: 4px;
+  }
+  .task-list::-webkit-scrollbar-thumb {
+    background: var(--surface2);
+    border-radius: 4px;
+  }
+
+  .task-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border-radius: 10px;
+    transition: all var(--transition);
+  }
+
+  .task-item.completed .task-text {
+    text-decoration: line-through;
+    color: #555;
+  }
+
+  .task-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--text2);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+
+  .task-checkbox.done {
+    background: var(--green2);
+    border-color: var(--green2);
+    color: #fff;
+  }
+
+  .task-text {
+    flex: 1;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .task-pomos {
+    display: flex;
+    gap: 3px;
+    font-size: 12px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .task-delete {
+    background: none;
+    border: none;
+    color: #555;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all var(--transition);
+    flex-shrink: 0;
+  }
+
+  .task-delete:hover {
+    color: var(--accent);
+    background: rgba(233,69,96,0.1);
+  }
+
+  .task-item.active-task {
+    border-left: 3px solid var(--accent);
+    background: rgba(233,69,96,0.08);
+  }
+
+  .task-item.active-task .task-text {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .empty-hint {
+    text-align: center;
+    color: #444;
+    font-size: 13px;
+    padding: 20px 0;
+  }
+
+  .task-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* ── Memo ── */
+  .memo-area {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .memo-textarea {
+    width: 100%;
+    height: 200px;
+    background: var(--bg);
+    border: 1px solid var(--surface2);
+    border-radius: 12px;
+    padding: 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    line-height: 1.6;
+    transition: border-color var(--transition);
+  }
+
+  .memo-textarea:focus {
+    border-color: var(--accent);
+  }
+
+  .memo-textarea::placeholder {
+    color: #555;
+  }
+
+  .memo-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .memo-saved {
+    color: var(--green);
+  }
+
+  /* ── Notification Toast ── */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-120px);
+    background: var(--accent);
+    color: #fff;
+    padding: 14px 28px;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 15px;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 100;
+    box-shadow: 0 10px 40px rgba(233,69,96,0.5);
+  }
+
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .toast.break-toast {
+    background: var(--green);
+    box-shadow: 0 10px 40px rgba(78,205,196,0.5);
+  }
+
+  /* ── Animations ── */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .pulsing {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes completePop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+
+  .pop {
+    animation: completePop 0.5s ease-in-out;
+  }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<div class="app">
+  <!-- Timer Ring -->
+  <div class="timer-ring-container" id="ringContainer">
+    <svg class="timer-ring" viewBox="0 0 260 260">
+      <circle class="ring-bg" cx="130" cy="130" r="118"/>
+      <circle class="ring-progress" id="ringProgress" cx="130" cy="130" r="118"
+              stroke-dasharray="741.4" stroke-dashoffset="0"/>
+    </svg>
+    <div class="timer-text">
+      <div class="timer-time" id="timerDisplay">25:00</div>
+      <div class="timer-label" id="timerLabel">专注</div>
+      <div class="pomodoro-count" id="pomodoroDots"></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-icon" id="btnReset" title="重置">↺</button>
+    <button class="btn btn-start" id="btnStart">▶ 开始专注</button>
+    <button class="btn btn-icon" id="btnSkip" title="跳过">⏭</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="timer">⏱ 计时器</button>
+    <button class="tab" data-tab="tasks">📋 任务</button>
+    <button class="tab" data-tab="memo">📝 备忘录</button>
+  </div>
+
+  <!-- Panels -->
+  <div class="panel active" id="panel-timer">
+    <div style="text-align:center;color:var(--text2);font-size:13px;line-height:1.6">
+      专注 25 分钟 · 短休 5 分钟 · 长休 15 分钟<br>
+      每 4 个番茄后进入长休息
+    </div>
+  </div>
+
+  <div class="panel" id="panel-tasks">
+    <div class="task-input-row">
+      <input type="text" id="taskInput" placeholder="添加新任务..." maxlength="100">
+      <input type="number" id="taskEstimate" class="task-estimate" value="1" min="1" max="99" title="预估番茄数">
+      <button class="btn btn-secondary" id="btnAddTask">添加</button>
+    </div>
+    <ul class="task-list" id="taskList"></ul>
+    <div class="task-actions" style="justify-content: flex-end">
+      <button class="btn btn-secondary" id="btnClearDone">清除已完成</button>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-memo">
+    <div class="memo-area">
+      <textarea class="memo-textarea" id="memoTextarea" placeholder="在这里记录你的想法、笔记...&#10;番茄专注时也可以随时记录哦~"></textarea>
+      <div class="memo-meta">
+        <span id="memoWordCount">0 字</span>
+        <span class="memo-saved" id="memoSaved">✓ 已保存</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+//  Pomodoro Timer Engine
+// ═══════════════════════════════════════
+
+const SETTINGS = {
+  WORK: 25 * 60,        // 25 minutes
+  SHORT_BREAK: 5 * 60,  // 5 minutes
+  LONG_BREAK: 15 * 60,  // 15 minutes
+  LONG_BREAK_INTERVAL: 4, // every 4 pomodoros
+};
+
+const STATE = {
+  IDLE: 'idle',
+  RUNNING: 'running',
+  PAUSED: 'paused',
+};
+
+const SESSION = {
+  WORK: 'work',
+  SHORT_BREAK: 'short_break',
+  LONG_BREAK: 'long_break',
+};
+
+class PomodoroTimer {
+  constructor() {
+    this.state = STATE.IDLE;
+    this.session = SESSION.WORK;
+    this.timeLeft = SETTINGS.WORK;
+    this.totalTime = SETTINGS.WORK;
+    this.pomodoroCount = 0;        // completed pomodoros in current cycle
+    this.totalPomodoros = 0;       // all-time completed
+    this.intervalId = null;
+    this.listeners = [];
+    this.loadState();
+  }
+
+  // Observer pattern for UI updates
+  onChange(fn) { this.listeners.push(fn); }
+  notify() { this.listeners.forEach(fn => fn(this.getState())); }
+
+  getState() {
+    return {
+      state: this.state,
+      session: this.session,
+      timeLeft: this.timeLeft,
+      totalTime: this.totalTime,
+      pomodoroCount: this.pomodoroCount,
+      totalPomodoros: this.totalPomodoros,
+      progress: 1 - (this.timeLeft / this.totalTime),
+    };
+  }
+
+  start() {
+    if (this.state === STATE.RUNNING) return;
+    if (this.state === STATE.IDLE) {
+      // Fresh start
+    }
+    this.state = STATE.RUNNING;
+    this.intervalId = setInterval(() => this.tick(), 1000);
+    this.notify();
+    this.saveState();
+  }
+
+  pause() {
+    if (this.state !== STATE.RUNNING) return;
+    this.state = STATE.PAUSED;
+    clearInterval(this.intervalId);
+    this.intervalId = null;
+    this.notify();
+    this.saveState();
+  }
+
+  toggle() {
+    if (this.state === STATE.RUNNING) {
+      this.pause();
+    } else {
+      this.start();
+    }
+  }
+
+  reset() {
+    clearInterval(this.intervalId);
+    this.intervalId = null;
+    this.state = STATE.IDLE;
+    this.session = SESSION.WORK;
+    this.timeLeft = SETTINGS.WORK;
+    this.totalTime = SETTINGS.WORK;
+    this.pomodoroCount = 0;
+    this.notify();
+    this.saveState();
+  }
+
+  skip() {
+    clearInterval(this.intervalId);
+    this.intervalId = null;
+    this.state = STATE.IDLE;
+    this._advanceSession(false);
+    this.notify();
+    this.saveState();
+  }
+
+  tick() {
+    if (this.timeLeft > 0) {
+      this.timeLeft--;
+      this.notify();
+      this.saveState();
+      return;
+    }
+    // Time's up!
+    clearInterval(this.intervalId);
+    this.intervalId = null;
+    this.state = STATE.IDLE;
+
+    const completedSession = this.session;
+    this._advanceSession(true);
+    this.notify();
+    this.saveState();
+
+    // Return what just completed for notification
+    if (this.onSessionComplete) {
+      this.onSessionComplete(completedSession);
+    }
+  }
+
+  _advanceSession(countPomodoro) {
+    if (this.session === SESSION.WORK) {
+      if (countPomodoro) {
+        this.pomodoroCount++;
+        this.totalPomodoros++;
+      }
+      // After work, take a break
+      if (this.pomodoroCount > 0 && this.pomodoroCount % SETTINGS.LONG_BREAK_INTERVAL === 0) {
+        this.session = SESSION.LONG_BREAK;
+        this.timeLeft = SETTINGS.LONG_BREAK;
+        this.totalTime = SETTINGS.LONG_BREAK;
+      } else {
+        this.session = SESSION.SHORT_BREAK;
+        this.timeLeft = SETTINGS.SHORT_BREAK;
+        this.totalTime = SETTINGS.SHORT_BREAK;
+      }
+    } else {
+      // After break, start work. Reset cycle if long break just ended.
+      if (this.session === SESSION.LONG_BREAK) {
+        this.pomodoroCount = 0;
+      }
+      this.session = SESSION.WORK;
+      this.timeLeft = SETTINGS.WORK;
+      this.totalTime = SETTINGS.WORK;
+    }
+  }
+
+  // Persistence
+  saveState() {
+    const data = {
+      state: this.state,
+      session: this.session,
+      timeLeft: this.timeLeft,
+      totalTime: this.totalTime,
+      pomodoroCount: this.pomodoroCount,
+      totalPomodoros: this.totalPomodoros,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem('pomodoro_timer', JSON.stringify(data));
+  }
+
+  loadState() {
+    try {
+      const raw = localStorage.getItem('pomodoro_timer');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+
+      // Only restore if saved recently (within 24h) and was running/paused
+      const elapsed = Date.now() - data.savedAt;
+      if (elapsed > 24 * 60 * 60 * 1000) return;
+
+      this.session = data.session;
+      this.totalTime = data.totalTime;
+      this.pomodoroCount = data.pomodoroCount;
+      this.totalPomodoros = data.totalPomodoros || 0;
+
+      if (data.state === STATE.RUNNING) {
+        // Account for time passed since save
+        const secondsPassed = Math.floor(elapsed / 1000);
+        this.timeLeft = Math.max(0, data.timeLeft - secondsPassed);
+        if (this.timeLeft > 0) {
+          this.state = STATE.PAUSED; // Resume as paused for safety
+        } else {
+          this.state = STATE.IDLE;
+          this.timeLeft = this.totalTime;
+        }
+      } else {
+        this.state = STATE.IDLE;
+        this.timeLeft = data.totalTime;
+      }
+    } catch (e) {
+      // Ignore corrupt data
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+//  Task Manager
+// ═══════════════════════════════════════
+
+class TaskManager {
+  constructor() {
+    this.tasks = [];
+    this.listeners = [];
+    this.load();
+  }
+
+  onChange(fn) { this.listeners.push(fn); }
+  notify() { this.listeners.forEach(fn => fn(this.tasks)); }
+
+  add(text, estimatedPomos = 1) {
+    this.tasks.unshift({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      text,
+      estimatedPomos: Math.max(1, Math.min(99, estimatedPomos)),
+      completedPomos: 0,
+      done: false,
+      createdAt: Date.now(),
+    });
+    this.save();
+    this.notify();
+  }
+
+  remove(id) {
+    this.tasks = this.tasks.filter(t => t.id !== id);
+    this.save();
+    this.notify();
+  }
+
+  toggle(id) {
+    const task = this.tasks.find(t => t.id === id);
+    if (task) {
+      task.done = !task.done;
+      this.save();
+      this.notify();
+    }
+  }
+
+  incrementPomo(id) {
+    const task = this.tasks.find(t => t.id === id);
+    if (task) {
+      task.completedPomos++;
+      if (task.completedPomos >= task.estimatedPomos) {
+        task.done = true;
+      }
+      this.save();
+      this.notify();
+    }
+  }
+
+  clearDone() {
+    this.tasks = this.tasks.filter(t => !t.done);
+    this.save();
+    this.notify();
+  }
+
+  save() {
+    localStorage.setItem('pomodoro_tasks', JSON.stringify(this.tasks));
+  }
+
+  load() {
+    try {
+      const raw = localStorage.getItem('pomodoro_tasks');
+      if (raw) this.tasks = JSON.parse(raw);
+    } catch (e) {
+      this.tasks = [];
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+//  Memo Manager
+// ═══════════════════════════════════════
+
+class MemoManager {
+  constructor() {
+    this.content = '';
+    this.listeners = [];
+    this.load();
+  }
+
+  onChange(fn) { this.listeners.push(fn); }
+  notify() { this.listeners.forEach(fn => fn(this.content)); }
+
+  setContent(text) {
+    this.content = text;
+    this.save();
+    this.notify();
+  }
+
+  getContent() { return this.content; }
+
+  save() {
+    localStorage.setItem('pomodoro_memo', this.content);
+  }
+
+  load() {
+    try {
+      this.content = localStorage.getItem('pomodoro_memo') || '';
+    } catch (e) {
+      this.content = '';
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+//  Sound Engine (Web Audio API)
+// ═══════════════════════════════════════
+
+class SoundEngine {
+  constructor() {
+    this.ctx = null;
+  }
+
+  _getCtx() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return this.ctx;
+  }
+
+  playBeep(freq, duration, type = 'sine', volume = 0.3) {
+    try {
+      const ctx = this._getCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + duration);
+    } catch (e) {
+      // Silently ignore audio errors
+    }
+  }
+
+  playWorkComplete() {
+    // 4 ascending beeps
+    [523, 659, 784, 1047].forEach((freq, i) => {
+      setTimeout(() => this.playBeep(freq, 0.3, 'sine', 0.25), i * 150);
+    });
+  }
+
+  playBreakComplete() {
+    // 3 gentle descending tones
+    [784, 659, 523].forEach((freq, i) => {
+      setTimeout(() => this.playBeep(freq, 0.4, 'sine', 0.2), i * 200);
+    });
+  }
+
+  playClick() {
+    this.playBeep(800, 0.05, 'sine', 0.1);
+  }
+}
+
+// ═══════════════════════════════════════
+//  UI Controller
+// ═══════════════════════════════════════
+
+const timer = new PomodoroTimer();
+const taskManager = new TaskManager();
+const memoManager = new MemoManager();
+const sound = new SoundEngine();
+
+// DOM refs
+const timerDisplay = document.getElementById('timerDisplay');
+const timerLabel = document.getElementById('timerLabel');
+const ringProgress = document.getElementById('ringProgress');
+const pomodoroDots = document.getElementById('pomodoroDots');
+const btnStart = document.getElementById('btnStart');
+const btnReset = document.getElementById('btnReset');
+const btnSkip = document.getElementById('btnSkip');
+const toast = document.getElementById('toast');
+const ringContainer = document.getElementById('ringContainer');
+const taskList = document.getElementById('taskList');
+const taskInput = document.getElementById('taskInput');
+const taskEstimate = document.getElementById('taskEstimate');
+const btnAddTask = document.getElementById('btnAddTask');
+const btnClearDone = document.getElementById('btnClearDone');
+const memoTextarea = document.getElementById('memoTextarea');
+const memoWordCount = document.getElementById('memoWordCount');
+const memoSaved = document.getElementById('memoSaved');
+const panelTimer = document.getElementById('panel-timer');
+const panelTasks = document.getElementById('panel-tasks');
+const panelMemo = document.getElementById('panel-memo');
+const tabs = document.querySelectorAll('.tab');
+
+const CIRCUMFERENCE = 2 * Math.PI * 118; // ~741.4
+
+// ── Timer ring & display ──
+function updateTimerDisplay(state) {
+  const mins = Math.floor(state.timeLeft / 60);
+  const secs = state.timeLeft % 60;
+  timerDisplay.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+  // Progress ring
+  const offset = CIRCUMFERENCE * (1 - state.progress);
+  ringProgress.style.strokeDashoffset = offset;
+
+  // Color by session
+  ringProgress.classList.remove('break', 'long-break');
+  if (state.session === SESSION.SHORT_BREAK) {
+    ringProgress.classList.add('break');
+  } else if (state.session === SESSION.LONG_BREAK) {
+    ringProgress.classList.add('long-break');
+  }
+
+  // Label
+  const labels = {
+    [SESSION.WORK]: '专注',
+    [SESSION.SHORT_BREAK]: '短休息',
+    [SESSION.LONG_BREAK]: '长休息',
+  };
+  timerLabel.textContent = labels[state.session];
+
+  // Start button
+  if (state.state === STATE.RUNNING) {
+    btnStart.textContent = '⏸ 暂停';
+    btnStart.classList.add('running');
+  } else {
+    const actionLabel = state.state === STATE.PAUSED ? '▶ 继续' : '▶ 开始专注';
+    btnStart.textContent = state.session !== SESSION.WORK && state.state === STATE.IDLE
+      ? (state.session === SESSION.SHORT_BREAK ? '▶ 开始短休' : '▶ 开始长休')
+      : actionLabel;
+    btnStart.classList.remove('running');
+  }
+
+  // Pomodoro dots
+  updatePomodoroDots(state.pomodoroCount);
+}
+
+function updatePomodoroDots(count) {
+  const cyclePos = count % SETTINGS.LONG_BREAK_INTERVAL;
+  let html = '';
+  for (let i = 0; i < SETTINGS.LONG_BREAK_INTERVAL; i++) {
+    let cls = 'pomodoro-dot';
+    if (i < cyclePos) cls += ' done';
+    else if (i === cyclePos && timer.session === SESSION.WORK) cls += ' current';
+    html += `<span class="${cls}"></span>`;
+  }
+  pomodoroDots.innerHTML = html;
+}
+
+// ── Toast notification ──
+let toastTimeout;
+function showToast(message, isBreak = false) {
+  clearTimeout(toastTimeout);
+  toast.textContent = message;
+  toast.className = 'toast ' + (isBreak ? 'break-toast' : '');
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+  toastTimeout = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2500);
+}
+
+// ── Button handlers ──
+btnStart.addEventListener('click', () => {
+  sound.playClick();
+  timer.toggle();
+});
+
+btnReset.addEventListener('click', () => {
+  sound.playClick();
+  if (timer.state === STATE.IDLE && timer.timeLeft === SETTINGS.WORK) {
+    // Already reset — reset the whole cycle
+    timer.pomodoroCount = 0;
+    timer.notify();
+    timer.saveState();
+    return;
+  }
+  timer.reset();
+});
+
+btnSkip.addEventListener('click', () => {
+  sound.playClick();
+  timer.skip();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  switch (e.code) {
+    case 'Space':
+      e.preventDefault();
+      timer.toggle();
+      break;
+    case 'KeyR':
+      timer.reset();
+      break;
+    case 'KeyS':
+      timer.skip();
+      break;
+    case 'Digit1':
+      switchTab('timer');
+      break;
+    case 'Digit2':
+      switchTab('tasks');
+      break;
+    case 'Digit3':
+      switchTab('memo');
+      break;
+  }
+});
+
+// ── Tab switching ──
+function switchTab(name) {
+  tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  panelTimer.classList.toggle('active', name === 'timer');
+  panelTasks.classList.toggle('active', name === 'tasks');
+  panelMemo.classList.toggle('active', name === 'memo');
+}
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+// ── Task UI ──
+let activeTaskId = null;
+
+function renderTasks(tasks) {
+  if (tasks.length === 0) {
+    taskList.innerHTML = '<div class="empty-hint">还没有任务，添加一个吧 ✨</div>';
+    return;
+  }
+  taskList.innerHTML = tasks.map(t => `
+    <li class="task-item ${t.done ? 'completed' : ''} ${t.id === activeTaskId ? 'active-task' : ''}" data-id="${t.id}">
+      <div class="task-checkbox ${t.done ? 'done' : ''}" data-action="toggle">${t.done ? '✓' : ''}</div>
+      <span class="task-text" data-action="activate">${escapeHtml(t.text)}</span>
+      <span class="task-pomos" title="已完成/预估番茄数">🍅${t.completedPomos}/${t.estimatedPomos}</span>
+      <button class="task-delete" data-action="delete" title="删除">×</button>
+    </li>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+taskList.addEventListener('click', (e) => {
+  const item = e.target.closest('.task-item');
+  if (!item) return;
+  const id = item.dataset.id;
+  const action = e.target.dataset.action || e.target.closest('[data-action]')?.dataset.action;
+
+  if (action === 'toggle') {
+    taskManager.toggle(id);
+    if (id === activeTaskId) activeTaskId = null;
+  } else if (action === 'delete') {
+    taskManager.remove(id);
+    if (id === activeTaskId) activeTaskId = null;
+  } else if (action === 'activate') {
+    // Toggle active task for current pomodoro
+    if (activeTaskId === id) {
+      activeTaskId = null;
+    } else {
+      const task = taskManager.tasks.find(t => t.id === id);
+      if (task && !task.done) {
+        activeTaskId = id;
+      }
+    }
+    renderTasks(taskManager.tasks);
+  }
+});
+
+// Update session complete handler to use activeTaskId
+timer.onSessionComplete = (session) => {
+  if (session === SESSION.WORK) {
+    sound.playWorkComplete();
+    showToast('🍅 番茄完成！休息一下吧~');
+    ringContainer.classList.add('pop');
+    setTimeout(() => ringContainer.classList.remove('pop'), 500);
+    // Increment pomodoro for the active task
+    if (activeTaskId) {
+      taskManager.incrementPomo(activeTaskId);
+      const task = taskManager.tasks.find(t => t.id === activeTaskId);
+      if (task && task.done) activeTaskId = null;
+      renderTasks(taskManager.tasks);
+    }
+  } else {
+    sound.playBreakComplete();
+    showToast('⏰ 休息结束，开始新的番茄！', true);
+  }
+};
+
+btnAddTask.addEventListener('click', () => {
+  const text = taskInput.value.trim();
+  if (!text) return;
+  const pomos = parseInt(taskEstimate.value) || 1;
+  taskManager.add(text, pomos);
+  taskInput.value = '';
+  taskEstimate.value = '1';
+  taskInput.focus();
+});
+
+taskInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') btnAddTask.click();
+});
+
+btnClearDone.addEventListener('click', () => {
+  taskManager.clearDone();
+});
+
+taskManager.onChange(renderTasks);
+
+// ── Memo UI ──
+let memoSaveTimeout;
+memoTextarea.addEventListener('input', () => {
+  memoManager.setContent(memoTextarea.value);
+  const count = memoTextarea.value.replace(/\s/g, '').length;
+  memoWordCount.textContent = `${count} 字`;
+
+  memoSaved.textContent = '保存中...';
+  memoSaved.className = '';
+  clearTimeout(memoSaveTimeout);
+  memoSaveTimeout = setTimeout(() => {
+    memoSaved.textContent = '✓ 已保存';
+    memoSaved.className = 'memo-saved';
+  }, 500);
+});
+
+function updateMemo(content) {
+  if (document.activeElement !== memoTextarea) {
+    memoTextarea.value = content;
+    memoWordCount.textContent = `${content.replace(/\s/g, '').length} 字`;
+  }
+}
+
+memoManager.onChange(updateMemo);
+
+// ── Initial render ──
+timer.onChange(updateTimerDisplay);
+updateTimerDisplay(timer.getState());
+renderTasks(taskManager.tasks);
+memoTextarea.value = memoManager.getContent();
+memoWordCount.textContent = `${memoManager.getContent().replace(/\s/g, '').length} 字`;
+
+// ── Handle page visibility (pause timer when hidden? Optional) ──
+document.addEventListener('visibilitychange', () => {
+  // Keep running — user expects it to work in background
+});
+
+// ── Prevent accidental close ──
+window.addEventListener('beforeunload', (e) => {
+  if (timer.state === STATE.RUNNING) {
+    timer.saveState();
+  }
+});
+
+console.log('🍅 番茄钟已就绪');
+console.log('  快捷键: 空格=开始/暂停  R=重置  S=跳过  1/2/3=切换标签');
+</script>
+
+</body>
+</html>

@@ -1,0 +1,20 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Node (if any)
+node_modules/
+
+# Env
+.env
+
+# SSH keys
+github-ssh-public-key.txt
