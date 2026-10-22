@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LegalReader · 法律文件解读工具</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23185fa5'/%3E%3Cpath d='M7 6h6.5l3.5 3.5V18H7z' fill='white'/%3E%3C/svg%3E">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --border:#e2e5ea; --border-strong:#c9ced6;
+  --text:#111827; --muted:#4b5563; --faint:#6b7280;
+  --brand:#185fa5; --brand-bg:#e8f1fb; --brand-hover:#0f4f8f;
+  --accent:#0f6e56; --accent-bg:#e2f3ed;
+  --amber:#854f0b; --amber-bg:#f8ecdc;
+  --green:#1d9e75; --green-bg:#e2f3ed; --red:#b91c1c; --red-bg:#fdeaea;
+  --radius:10px;
+  --shadow-pop:0 12px 32px rgba(17,24,39,.16), 0 2px 8px rgba(17,24,39,.08);
+  --ease-spring:cubic-bezier(0.32,0.72,0,1);
+  --ease-out-apple:cubic-bezier(0.16,1,0.3,1);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--text); font-size:14px; line-height:1.65;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+button{font-family:inherit; cursor:pointer;}
+a{color:var(--brand);}
+::selection{background:var(--brand-bg); color:var(--text);}
+:focus-visible{outline:2px solid var(--brand); outline-offset:2px; border-radius:4px;}
+/* Apple 即时反馈：按下即响应 */
+.btn:active,.sum-tab:active,.viewtab:active,.term-chip:active,.a-ref:active{transform:scale(0.96);}
+@media (prefers-reduced-motion:reduce){ *,*::before,*::after{animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important;} }
+::-webkit-scrollbar{width:10px; height:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#c9ced6; border-radius:6px; border:2px solid transparent; background-clip:content-box;}
+::-webkit-scrollbar-thumb:hover{background:#9aa1ab; background-clip:content-box;}
+
+/* ===== 顶栏 ===== */
+header{
+  display:flex; align-items:center; gap:10px; padding:10px 16px;
+  background:var(--panel); border-bottom:1px solid var(--border);
+  position:sticky; top:0; z-index:20; flex-wrap:wrap;
+}
+.logo{font-size:16px; font-weight:600; color:var(--brand); margin-right:auto; white-space:nowrap;}
+.logo small{font-weight:400; color:var(--muted); font-size:12px; margin-left:6px;}
+.conn{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--amber); padding:5px 10px; border:1px solid #e8c88a; border-radius:16px; background:var(--amber-bg); cursor:pointer;}
+.conn .dot{width:8px; height:8px; border-radius:50%; background:var(--amber);}
+.conn.on .dot{background:var(--green); box-shadow:0 0 0 3px var(--green-bg);}
+.conn.on{color:var(--accent); border-color:#9fe1cb; background:var(--green-bg);}
+.btn{
+  border:1px solid var(--border-strong); background:#fff; color:var(--text);
+  padding:7px 13px; border-radius:8px; font-size:13px; transition:.15s;
+}
+.btn:hover{background:#f3f4f6; border-color:#9ca3af;}
+.btn.primary{background:var(--brand); border-color:var(--brand); color:#fff; font-weight:500; padding:8px 16px;}
+.btn.primary:hover{background:#0f4f8f;}
+.btn.primary:disabled{background:#c7d7e8; border-color:#c7d7e8; color:#4b5563; cursor:not-allowed;}
+.btn.accent{background:var(--accent); border-color:var(--accent); color:#fff;}
+.btn.accent:hover{background:#0b5c47;}
+
+/* ===== 进度条 ===== */
+#progress{display:none; padding:10px 16px; background:var(--brand-bg); border-bottom:1px solid var(--border);}
+#progress .bar{height:6px; background:#c9ddf0; border-radius:3px; overflow:hidden;}
+#progress .bar i{display:block; height:100%; width:100%; background:var(--brand); transform:scaleX(0); transform-origin:left center; transition:transform .35s cubic-bezier(.4,0,.2,1);}
+#progress .txt{margin-top:6px; font-size:12px; color:var(--brand);}
+
+/* ===== 空态 ===== */
+#empty{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 20px; text-align:center; gap:16px; min-height:60vh;}
+#empty h2{font-size:20px; font-weight:600;}
+#empty p{color:var(--muted); max-width:560px;}
+.dropzone{width:100%; max-width:640px; border:2px dashed var(--border-strong); border-radius:14px; padding:40px 20px; background:var(--panel); cursor:pointer; transition:.15s;}
+.dropzone:hover,.dropzone.drag{border-color:var(--brand); background:var(--brand-bg);}
+.dropzone .icon{width:44px; height:44px; color:var(--brand); margin:0 auto 10px; display:block;}
+.dropzone .hint{color:var(--muted); font-size:13px;}
+textarea#paste{width:100%; max-width:640px; height:200px; border:1px solid var(--border-strong); border-radius:10px; padding:12px; font-family:inherit; font-size:13px; resize:vertical; display:none;}
+
+/* ===== 工作区 ===== */
+#workspace{display:none; height:calc(100vh - 110px);}
+.split{display:flex; height:100%;}
+.pane{flex:1; overflow:auto; padding:0; min-width:0; overscroll-behavior:contain;}
+.pane-head{position:sticky; top:0; z-index:5; background:var(--panel); padding:6px 14px; border-bottom:1px solid var(--border); font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px;}
+.pane-head .tag{font-weight:400; font-size:12px; padding:1px 7px; border-radius:10px; background:var(--brand-bg); color:var(--brand);}
+.viewtabs{display:flex; gap:4px; margin-left:4px;}
+.viewtab{border:1px solid var(--border-strong); background:#fff; padding:3px 11px; border-radius:8px; font-size:12px; font-weight:400;}
+.viewtab.active{background:var(--brand); color:#fff; border-color:var(--brand);}
+.pane-body{padding:14px 16px;}
+#leftPane{background:var(--panel); border-right:1px solid var(--border);}
+#rightPane{background:#fbfcfd;}
+
+.sent{display:flex; gap:12px; padding:8px 10px; border-radius:8px; margin-bottom:2px; cursor:pointer;}
+.sent:hover{background:#f3f6fb;}
+.sent.active{background:var(--brand-bg); outline:1px solid var(--brand);}
+.sent .idx{flex:0 0 24px; color:var(--faint); font-size:12px; text-align:right; padding-top:2px; user-select:none;}
+.sent .body{flex:1; min-width:0;}
+.sent .orig{white-space:pre-wrap; word-break:break-word;}
+.sent .trans{white-space:pre-wrap; word-break:break-word;}
+
+/* 引注（可点击，弹解析卡片） */
+.cite{color:var(--accent); border-bottom:1px dotted var(--accent); padding:0 1px; cursor:pointer; font-weight:500; transition:.12s;}
+.cite:hover{background:var(--accent-bg); border-bottom-style:solid;}
+.cite.cite-us_case,.cite.cite-case_name,.cite.cite-ecli{color:var(--brand); border-bottom-color:var(--brand);}
+.cite.cite-us_code,.cite.cite-celex,.cite.cite-eu_reg,.cite.cite-eu_article{color:var(--amber); border-bottom-color:var(--amber);}
+
+/* 解析卡片 */
+.analysis{margin-top:8px; border-top:1px dashed var(--border); padding-top:8px; display:none;}
+.sent.open .analysis{display:block;}
+.a-block{margin-bottom:8px; font-size:13px;}
+.a-block .a-title{font-size:12px; color:var(--muted); font-weight:600; margin-bottom:3px; letter-spacing:.3px;}
+.a-point{background:var(--accent-bg); border-left:1px solid var(--accent); padding:7px 12px; border-radius:6px; color:#0b3d31;}
+.a-term{display:flex; gap:6px; margin:3px 0;}
+.a-term b{color:var(--brand); white-space:nowrap; font-weight:600;}
+.a-ref{display:inline-block; margin:3px 6px 3px 0; padding:3px 9px; background:#fff; border:1px solid var(--border); border-radius:16px; cursor:pointer; color:var(--text); font-size:12px;}
+.a-ref:hover{border-color:var(--brand); color:var(--brand); background:var(--brand-bg);}
+.a-ref .rtype{font-size:11px; padding:0 5px; border-radius:8px; background:var(--amber-bg); color:var(--amber); margin-left:4px;}
+.empty-hint{color:var(--faint); text-align:center; padding:40px 20px; font-size:13px;}
+
+/* PDF 原件视图 */
+#pdfView{padding:14px 16px;}
+#pdfView .pdf-page{position:relative; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.12); margin-bottom:14px; padding:10px; border-radius:6px;}
+#pdfView .pdf-page canvas{display:block;}
+#pdfView .pdf-text-layer{position:absolute; top:10px; left:10px; overflow:hidden; line-height:1;}
+#pdfView .pdf-text-layer span{position:absolute; color:transparent; white-space:pre; cursor:text; transform-origin:0 0;}
+#pdfView .pdf-text-layer span.hl{background:rgba(24,95,165,.32); border-radius:2px; box-shadow:0 0 0 1px rgba(24,95,165,.3);}
+#pdfView .page-no{text-align:center; color:var(--faint); font-size:12px; margin-top:6px;}
+
+/* ===== 底部汇总 ===== */
+#summary{display:none; position:relative; border-top:1px solid var(--border); background:var(--panel); height:46vh; min-height:180px; max-height:88vh; overflow:auto; overscroll-behavior:contain; transition:height .35s var(--ease-spring);}
+#summary.dragging{transition:none;}
+.sum-header{position:sticky; top:0; z-index:6; background:var(--panel);}
+.sum-handle{height:16px; padding-top:7px; text-align:center; cursor:ns-resize; touch-action:none;}
+.sum-handle::after{content:''; display:inline-block; width:40px; height:5px; background:#c9ced6; border-radius:3px; transition:background .15s; pointer-events:none;}
+.sum-handle:hover::after{background:#9aa1ab;}
+.sum-tabs{display:flex; gap:4px; padding:4px 14px 8px; border-bottom:1px solid var(--border);}
+.sum-tab{border:1px solid var(--border-strong); background:#fff; padding:5px 13px; border-radius:8px; font-size:13px;}
+.sum-tab.active{background:var(--brand); color:#fff; border-color:var(--brand);}
+.sum-content{padding:14px 18px;}
+.sum-content .s-item{margin-bottom:10px;}
+.sum-content .s-item .k{font-weight:600; color:var(--brand);}
+.sum-content .s-item .v{color:var(--text);}
+
+/* ===== 测验 ===== */
+.quiz-start{text-align:center; padding:32px 20px;}
+.quiz-start p{color:var(--muted); margin-bottom:16px; max-width:520px; margin-left:auto; margin-right:auto;}
+.quiz-item{border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:14px; background:#fff;}
+.q-title{font-weight:600; margin-bottom:10px; display:flex; gap:8px; align-items:flex-start;}
+.q-no{background:var(--brand); color:#fff; border-radius:6px; padding:0 8px; font-size:12px; line-height:20px; flex:0 0 auto;}
+.q-type{background:var(--amber-bg); color:var(--amber); border-radius:6px; padding:0 8px; font-size:12px; line-height:20px; flex:0 0 auto;}
+.q-opt{display:flex; align-items:center; gap:8px; padding:8px 10px; margin:4px 0; border:1px solid var(--border); border-radius:8px; cursor:pointer; font-size:13px;}
+.q-opt:hover{background:var(--brand-bg); border-color:var(--brand);}
+.q-opt.correct{background:var(--green-bg); border-color:var(--green);}
+.q-opt.wrong{background:var(--red-bg); border-color:var(--red);}
+.q-fill{width:100%; padding:8px 10px; border:1px solid var(--border-strong); border-radius:8px; font-size:13px; font-family:inherit;}
+.q-result{margin-top:10px; padding:10px 12px; border-radius:8px; font-size:13px; line-height:1.6;}
+.q-result.ok{background:var(--green-bg); color:var(--accent);}
+.q-result.no{background:var(--red-bg); color:var(--red);}
+.quiz-actions{display:flex; gap:8px; margin:16px 0;}
+.quiz-score{background:var(--brand-bg); border-radius:10px; padding:14px 16px; font-size:15px; font-weight:600; color:var(--brand); margin-top:8px;}
+
+/* ===== 引注解析卡片（浮层） ===== */
+#citeCard{display:none; position:fixed; z-index:80; width:340px; max-width:92vw; background:#fff; border-radius:12px; box-shadow:var(--shadow-pop); overflow:hidden; animation:cardIn .32s var(--ease-out-apple);}
+@keyframes cardIn{from{opacity:0; transform:translateY(8px) scale(.97);} to{opacity:1; transform:none;}}
+#citeCard .cc-head{display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--brand-bg); font-weight:600; font-size:13px; color:var(--brand);}
+#citeCard .cc-head .cc-type{font-size:12px; font-weight:400; padding:1px 8px; border-radius:10px; background:var(--amber-bg); color:var(--amber);}
+#citeCard .cc-body{padding:12px 14px; font-size:13px;}
+#citeCard .cc-loading{color:var(--muted); display:flex; align-items:center; gap:8px;}
+#citeCard .cc-title{font-weight:600; margin-bottom:4px;}
+#citeCard .cc-meta{color:var(--muted); font-size:12px; margin-bottom:2px;}
+#citeCard .cc-source{color:var(--faint); font-size:12px; margin-top:6px;}
+#citeCard .cc-error{color:var(--red); font-size:12px;}
+#citeCard .cc-actions{margin-top:10px; display:flex; gap:8px;}
+#citeCard .cc-btn{display:inline-block; padding:6px 14px; background:var(--accent); color:#fff; border-radius:8px; text-decoration:none; font-size:13px;}
+#citeCard .cc-btn:hover{background:#0b5c47;}
+#citeCard .cc-btn.alt{background:#fff; color:var(--brand); border:1px solid var(--brand);}
+#citeCard .cc-note{background:var(--amber-bg); border-left:1px solid var(--amber); padding:8px 10px; border-radius:6px; margin-bottom:10px; font-size:12px; color:#633806; line-height:1.6;}
+#citeCard .cc-note .cc-note-title{font-size:12px; font-weight:600; color:var(--amber); margin-bottom:3px;}
+#citeCard .cc-term-explain{margin-bottom:10px; line-height:1.7;}
+#citeCard .cc-deep{white-space:pre-wrap; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); font-size:13px; line-height:1.8; max-height:300px; overflow:auto;}
+.term-chip{display:inline-block; padding:0 8px; background:var(--brand-bg); color:var(--brand); border-radius:6px; cursor:pointer; font-weight:600; margin-right:4px; transition:.12s; border:1px solid transparent;}
+.term-chip:hover{background:var(--brand); color:#fff;}
+.vbadge{display:inline-block; font-size:12px; padding:1px 7px; border-radius:8px; margin-right:4px; font-weight:500;}
+.vbadge.vexact,.vbadge.vverified{background:var(--green-bg); color:var(--accent);}
+.vbadge.vsearch{background:var(--amber-bg); color:var(--amber);}
+.vbadge.vunver{background:#eef0f2; color:var(--muted);}
+.ctag{display:inline-block; font-size:12px; padding:0 6px; border-radius:8px; margin-left:4px; font-weight:500;}
+.ctag.clow{background:var(--red-bg); color:var(--red);}
+.ctag.cmed{background:var(--amber-bg); color:var(--amber);}
+.spinner{width:14px; height:14px; border:2px solid var(--border-strong); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ===== 设置抽屉 ===== */
+#settings-mask{display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:50;}
+#settings{display:none; position:fixed; top:0; right:0; bottom:0; width:400px; max-width:94vw; background:var(--panel); z-index:51; box-shadow:-2px 0 12px rgba(0,0,0,.12); padding:22px; overflow:auto;}
+#settings h3{font-size:16px; margin-bottom:4px;}
+#settings .sub{font-size:12px; color:var(--muted); margin-bottom:18px;}
+.conn-banner{display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:10px; margin-bottom:18px; font-size:13px;}
+.conn-banner.ok{background:var(--green-bg); color:var(--accent); border:1px solid #9fe1cb;}
+.conn-banner.off{background:var(--red-bg); color:var(--red); border:1px solid #f7c1c1;}
+.conn-banner .ic{width:10px; height:10px; border-radius:50%; background:currentColor; flex:0 0 auto;}
+.field{margin-bottom:14px;}
+.field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px; font-weight:600;}
+.field input,.field select{width:100%; padding:8px 10px; border:1px solid var(--border-strong); border-radius:8px; font-size:13px; font-family:inherit;}
+.field .hint{font-size:12px; color:var(--faint); margin-top:4px;}
+.set-actions{display:flex; gap:8px; margin-top:18px;}
+
+/* ===== toast ===== */
+#toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:#323232; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; display:none; z-index:99; max-width:80vw; box-shadow:0 4px 16px rgba(0,0,0,.2); pointer-events:none;}
+#toast.err{background:var(--red);}
+#toast.ok{background:var(--accent);}
+
+@media (max-width:820px){ .split{flex-direction:column;} #leftPane{border-right:none; border-bottom:1px solid var(--border);} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">LegalReader<small>法律文件解读工具</small></div>
+  <div class="conn" id="connStatus"><span class="dot"></span><span id="connText">未配置</span></div>
+  <button class="btn" id="btnOpen">打开文件</button>
+  <button class="btn" id="btnPaste">粘贴文本</button>
+  <button class="btn" id="btnSample">示例</button>
+  <button class="btn" id="btnExport" disabled>导出</button>
+  <button class="btn primary" id="btnRun" disabled>开始解读</button>
+  <button class="btn" id="btnSettings">设置</button>
+  <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.md,.html" hidden>
+</header>
+
+<div id="progress">
+  <div class="bar"><i id="progBar"></i></div>
+  <div class="txt" id="progTxt">准备中…</div>
+</div>
+
+<div id="empty">
+  <h2>解读英语法律文件</h2>
+  <p>上传判决书、法规、论文或合同，工具会逐句翻译并解析法律术语、引注与核心观点；点击文中引注可直接查询官方数据库与学术出处。</p>
+  <div class="dropzone" id="dropzone">
+    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="8" y1="13" x2="16" y2="13"/>
+      <line x1="8" y1="17" x2="13" y2="17"/>
+    </svg>
+    <div><b>拖拽文件到这里</b>，或点击选择</div>
+    <div class="hint">支持 PDF / Word / TXT / Markdown（PDF 保留原件精读视图）</div>
+  </div>
+  <textarea id="paste" placeholder="在此粘贴英语法律文本，然后点击「开始解读」…"></textarea>
+  <div class="hint" id="pasteActions" style="display:none;">
+    <button class="btn primary" id="btnPasteRun">开始解读</button>
+    <button class="btn" id="btnPasteCancel">取消</button>
+  </div>
+</div>
+
+<div id="workspace">
+  <div class="split">
+    <div class="pane" id="leftPane">
+      <div class="pane-head">
+        <span>原文</span>
+        <div class="viewtabs">
+          <button class="viewtab active" data-view="compare">对照</button>
+          <button class="viewtab" data-view="pdf">原件</button>
+        </div>
+        <span class="tag" id="leftTag">点击引注查询出处</span>
+      </div>
+      <div class="pane-body" id="leftBody"></div>
+      <div id="pdfView" style="display:none;"></div>
+    </div>
+    <div class="pane" id="rightPane">
+      <div class="pane-head">译文与解析 <span class="tag">点击句子展开解析</span></div>
+      <div class="pane-body" id="rightBody"></div>
+    </div>
+  </div>
+</div>
+
+<div id="summary">
+  <div class="sum-header">
+    <div class="sum-handle" id="summaryHandle" title="拖拽调整高度"></div>
+    <div class="sum-tabs">
+      <button class="sum-tab active" data-tab="terms">术语表</button>
+      <button class="sum-tab" data-tab="refs">参考出处</button>
+      <button class="sum-tab" data-tab="points">观点/义务摘要</button>
+      <button class="sum-tab" data-tab="quiz">测验</button>
+    </div>
+  </div>
+  <div class="sum-content" id="sumContent"></div>
+</div>
+
+<div id="citeCard"></div>
+
+<div id="settings-mask"></div>
+<div id="settings">
+  <h3>设置</h3>
+  <div class="sub">连接 DeepSeek 大模型服务</div>
+  <div class="conn-banner off" id="setBanner"><span class="ic"></span><span id="setBannerText">尚未配置 API Key</span></div>
+  <div class="field">
+    <label>DeepSeek API Key</label>
+    <input type="password" id="setKey" placeholder="sk-…" autocomplete="off">
+    <div class="hint" id="keyHint">Key 仅保存在本机 config.json，不经过任何第三方。</div>
+  </div>
+  <div class="field">
+    <label>CourtListener Token（可选）</label>
+    <input type="password" id="setClToken" placeholder="免费注册 courtlistener.com 获取" autocomplete="off">
+    <div class="hint" id="clHint">用于把判例引注精确解析到原文。不填也能用，判例将显示为搜索链接。</div>
+  </div>
+  <div class="field">
+    <label>模型</label>
+    <select id="setModel">
+      <option value="deepseek-chat">deepseek-chat（推荐，稳定）</option>
+      <option value="deepseek-reasoner">deepseek-reasoner（推理更强，较慢）</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>接口地址（一般无需修改）</label>
+    <input type="text" id="setBase" value="https://api.deepseek.com/chat/completions">
+  </div>
+  <div class="field">
+    <label>目标语言</label>
+    <input type="text" id="setLang" value="简体中文">
+  </div>
+  <div class="field">
+    <label>阅读深度</label>
+    <select id="setDepth">
+      <option value="quick">快速（仅翻译）</option>
+      <option value="standard" selected>标准（翻译 + 术语 + 观点 + 引注）</option>
+      <option value="deep">深度（标准 + 判例要旨 + 论证脉络）</option>
+    </select>
+    <div class="hint">快速省 token，深度更透彻。</div>
+  </div>
+  <div class="set-actions">
+    <button class="btn primary" id="btnSaveSet">保存</button>
+    <button class="btn" id="btnTestSet">测试连接</button>
+    <button class="btn" id="btnCloseSet">关闭</button>
+  </div>
+  <div class="hint" style="margin-top:12px;" id="setStatus"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= 全局状态 ================= */
+const PDF_WORKER_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const state = {
+  model: 'deepseek-chat', temperature: 0.3, lang: '简体中文', depth: 'standard',
+  rawText: '', cleanedText: '', pdfFile: null, docType: 'text',
+  segments: [], running: false, hasKey: false,
+  fileName: '', quiz: null,
+  pdfDoc: null, pdfTextIndex: null, stopRequested: false, abortController: null,
+};
+
+/* ================= 工具 ================= */
+const $ = s=>document.querySelector(s);
+const $$ = s=>document.querySelectorAll(s);
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function toast(msg, type){ const t=$('#toast'); t.textContent=msg; t.className=type||''; t.style.display='block'; clearTimeout(t._t); t._t=setTimeout(()=>t.style.display='none',3200); }
+function downloadBlob(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+
+/* ================= 引注识别 ================= */
+const REPORTERS='U\\.S\\.|S\\.Ct\\.|F\\.3d|F\\.4th|F\\.2d|F\\.Supp\\.2d|F\\.Supp\\.3d|F\\.Supp\\.|L\\.Ed\\.2d|L\\.Ed\\.|A\\.2d|A\\.3d|N\\.E\\.2d|N\\.E\\.3d|P\\.2d|P\\.3d|So\\.2d|So\\.3d|Cal\\.|N\\.Y\\.|Mass\\.|Ill\\.|N\\.J\\.|Pa\\.|Tex\\.|S\\.W\\.2d|S\\.W\\.3d|N\\.W\\.2d|S\\.E\\.2d';
+const CITATION_PATTERNS=[
+  {type:'ecli', label:'欧盟判例 ECLI', regex:new RegExp('\\bECLI:[A-Z]{2}:[A-Z]+:\\d{4}:\\d+','g')},
+  {type:'celex', label:'欧盟法规 CELEX', regex:new RegExp('\\b[356]\\d{4}[A-Z]{1,2}\\d{2,4}\\b','g')},
+  {type:'us_code', label:'美国法典', regex:new RegExp('\\b\\d{1,2}\\s+U\\.?S\\.?C\\.?\\s*(?:§+|sec\\.?|sections?)?\\s*\\d{1,4}[a-z]?(?:\\([a-z0-9]+\\))?(?:-\\d+)?','gi')},
+  {type:'us_case', label:'美国判例引注', regex:new RegExp('\\b\\d{1,3}\\s+(?:'+REPORTERS+')\\s+\\d{1,5}(?:,\\s*\\d{1,5})?','g')},
+  {type:'case_name', label:'判例名', regex:new RegExp('\\b[A-Z][\\w.\u2019\'\\-]+(?:\\s+[A-Z][\\w.\u2019\'\\-]+){0,4}\\s+v\\.\\s+[A-Z][\\w.\u2019\'\\-]+(?:\\s+[A-Z][\\w.\u2019\'\\-]+){0,4}','g')},
+  {type:'uk_case', label:'英国判例', regex:new RegExp('\\[\\d{4}\\]\\s+[A-Z]+\\s+\\d+','g')},
+  {type:'eu_reg', label:'欧盟法规', regex:new RegExp('(?:Regulation|Directive|Decision)\\s*\\(?(?:EU|EC|EEC)\\)?\\s*\\d{4}/\\d+','gi')},
+  {type:'eu_article', label:'欧盟条款', regex:new RegExp('\\bArticle\\s+\\d{1,3}[a-z]?(?:\\(\\d+\\))?\\b','gi')},
+];
+const TYPE_LABEL={ecli:'欧盟判例',celex:'欧盟法规',us_code:'美国法典',us_case:'美国判例',case_name:'判例',uk_case:'英国判例',eu_reg:'欧盟法规',eu_article:'欧盟条款',case:'判例',article:'论文',book:'著作',statute:'法规',journal:'期刊',other:'其他'};
+
+function findCitations(text){
+  const ms=[];
+  for(const p of CITATION_PATTERNS){
+    const re=new RegExp(p.regex.source, p.regex.flags); let m;
+    while((m=re.exec(text))!==null){ ms.push({start:m.index,end:m.index+m[0].length,type:p.type,text:m[0]}); if(m.index===re.lastIndex) re.lastIndex++; }
+  }
+  ms.sort((a,b)=>a.start-b.start || b.end-a.end);
+  const acc=[]; let last=-1;
+  for(const m of ms){ if(m.start>=last){ acc.push(m); last=m.end; } }
+  return acc;
+}
+function highlight(text){
+  const cites=findCitations(text);
+  if(!cites.length) return esc(text);
+  let html='',pos=0;
+  for(const c of cites){
+    html+=esc(text.slice(pos,c.start));
+    html+='<span class="cite cite-'+c.type+'" data-cite-text="'+esc(c.text)+'" data-cite-type="'+c.type+'" title="点击查询出处">'+esc(c.text)+'</span>';
+    pos=c.end;
+  }
+  html+=esc(text.slice(pos));
+  return html;
+}
+
+/* ================= 引注解析卡片 ================= */
+async function openCitationCard(text, type, x, y, note, conf){
+  const card=$('#citeCard');
+  const label=TYPE_LABEL[type]||type||'引注';
+  const head='<div class="cc-head">引注解析<span class="cc-type">'+esc(label)+'</span></div>';
+  const noteHtml=note?'<div class="cc-note"><div class="cc-note-title">引用说明'+confidenceTag(conf)+'</div>'+esc(note)+'</div>':'';
+  card.innerHTML=head+'<div class="cc-body">'+noteHtml+'<div class="cc-loading"><span class="spinner"></span>正在查询数据库…</div></div>';
+  card.style.display='block'; positionCard(card,x,y);
+  try{
+    const ctrl=new AbortController(); const timer=setTimeout(()=>ctrl.abort(),12000);
+    const resp=await fetch('/api/citations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({citations:[{text,type}]}),signal:ctrl.signal});
+    clearTimeout(timer);
+    const data=await resp.json();
+    const r=(data.results&&data.results[0])||{};
+    card.innerHTML=head+'<div class="cc-body">'+noteHtml+renderCiteResult(r)+'</div>';
+    positionCard(card,x,y);
+  }catch(e){
+    card.innerHTML=head+'<div class="cc-body">'+noteHtml+'<div class="cc-error">无法连接查询服务：'+esc(e.message)+'</div><div class="cc-actions"><a class="cc-btn alt" href="https://www.google.com/search?q='+encodeURIComponent(text)+'" target="_blank" rel="noopener">手动搜索</a></div></div>';
+  }
+}
+function renderCiteResult(r){
+  if(r.error) return '<div class="cc-error">解析失败：'+esc(r.error)+'</div>';
+  let h='';
+  if(r.title) h+='<div class="cc-title">'+esc(r.title)+'</div>';
+  if(r.authors||r.year) h+='<div class="cc-meta">'+esc([r.authors,r.year].filter(Boolean).join(' · '))+'</div>';
+  if(r.court) h+='<div class="cc-meta">'+esc(r.court)+'</div>';
+  h+='<div class="cc-source">'+verifiedBadge(r.verified)+' · 来源：'+esc(r.source||'')+'</div>';
+  if(r.url) h+='<div class="cc-actions"><a class="cc-btn" href="'+r.url+'" target="_blank" rel="noopener">查看原文 ↗</a></div>';
+  return h;
+}
+function verifiedBadge(v){
+  if(v==='exact') return '<span class="vbadge vexact">官方库精确定位</span>';
+  if(v==='verified') return '<span class="vbadge vverified">已验证真实出处</span>';
+  if(v==='search') return '<span class="vbadge vsearch">搜索定位·未精确验证</span>';
+  return '<span class="vbadge vunver">未验证</span>';
+}
+function confidenceTag(c){
+  if(c==='low') return ' <span class="ctag clow" title="该结论不确定，建议核对原文">不确定</span>';
+  if(c==='medium') return ' <span class="ctag cmed" title="合理推断">推断</span>';
+  return '';
+}
+function openTermCard(term, explain, x, y){
+  const card=$('#citeCard');
+  card.innerHTML='<div class="cc-head">术语解释<span class="cc-type">'+esc(term)+'</span></div><div class="cc-body"><div class="cc-term-explain">'+esc(explain||'（无简短解释）')+'</div><div class="cc-actions"><button class="cc-btn" id="ccDeepBtn">深入解释</button><a class="cc-btn alt" href="https://www.google.com/search?q='+encodeURIComponent(term+' legal definition')+'" target="_blank" rel="noopener">查词典</a></div><div id="ccDeepResult"></div></div>';
+  card.style.display='block'; positionCard(card,x,y);
+  $('#ccDeepBtn').onclick=async ()=>{
+    $('#ccDeepResult').innerHTML='<div class="cc-loading"><span class="spinner"></span>正在生成详细解释…</div>';
+    try{
+      const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:state.model,messages:[{role:'user',content:'请用中文详细解释法律术语「'+term+'」，依次说明：定义、构成要件、法理基础、相关判例、实务要点。条理清晰，分点列出。'}],max_tokens:2000})});
+      const data=await resp.json();
+      if(!resp.ok) throw new Error(data.message||('请求失败('+resp.status+')'));
+      const content=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+      $('#ccDeepResult').innerHTML='<div class="cc-deep">'+esc(content||'无结果')+'</div>';
+    }catch(e){ $('#ccDeepResult').innerHTML='<div class="cc-error">解释失败：'+esc(e.message)+'</div>'; }
+  };
+}
+function positionCard(card,x,y){
+  const w=card.offsetWidth||340, h=card.offsetHeight||120;
+  let left=Math.min(x, window.innerWidth-w-12); left=Math.max(8,left);
+  let top=y+14; if(top+h>window.innerHeight-8) top=Math.max(8, y-h-8);
+  card.style.left=left+'px'; card.style.top=top+'px';
+}
+
+/* ================= 文本清洗（PDF 噪音去除） ================= */
+function cleanText(raw){
+  const lines=raw.replace(/\r/g,'').split('\n');
+  const freq={};
+  for(const l of lines){ const t=l.trim(); if(t) freq[t]=(freq[t]||0)+1; }
+  const out=[];
+  for(const l of lines){
+    const t=l.trim();
+    if(!t) { out.push(''); continue; }
+    if(/^\d{1,4}$/.test(t)) continue;                       // 孤立页码
+    if(/^[-–—]\s*\d{1,4}\s*[-–—]$/.test(t)) continue;       // - 12 -
+    if(/^Page\s+\d+/i.test(t)) continue;                    // Page 3
+    if(/^\d+\s*of\s*\d+$/i.test(t)) continue;               // 3 of 24
+    if(/^\d+$/.test(t.replace(/\s/g,''))) continue;
+    if(freq[t]>=3 && t.length<60) continue;                 // 重复页眉/页脚
+    out.push(t);
+  }
+  // 合并断行：把相邻的非空行连接成段落（按空行分隔）
+  const paras=[]; let cur='';
+  for(const t of out){
+    if(!t){ if(cur){paras.push(cur); cur='';} continue; }
+    cur=cur?cur+' '+t:t;
+  }
+  if(cur) paras.push(cur);
+  return paras.join('\n\n');
+}
+
+/* ================= 分段 ================= */
+function segmentText(text){
+  const paras=text.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+  const blocks=[]; let cur='';
+  for(const p of paras){ if(cur&&(cur.length+p.length)>2400){blocks.push(cur);cur=p;} else cur=cur?cur+'\n\n'+p:p; }
+  if(cur) blocks.push(cur);
+  return blocks;
+}
+
+/* ================= LLM 调用 ================= */
+const PROMPT_BASE=`你是一位精通英美法、欧盟法和企业合规的资深法律翻译与注释专家。
+请对下面这段英语法律文本逐句处理，输出严格的 JSON。
+要求：把文本切分成句子，逐句翻译成目标语言（默认简体中文）；original 必须与原文逐字一致，逐句处理、不漏句不合并句。`;
+
+function getSystemPrompt(depth){
+  if(depth==='quick'){
+    return PROMPT_BASE+`
+
+【快速浏览模式】只做逐句翻译，不做术语/观点/引注解析。
+
+输出格式（严格 JSON，不要输出 JSON 以外的内容）：
+{"sentences":[{"original":"原文（逐字一致）","translation":"译文","terms":[],"point":"","references":[]}]}`;
+  }
+  if(depth==='deep'){
+    return PROMPT_BASE+`
+
+【深度研究模式】
+1. 对每句提取有法律意义的术语 terms，给出精炼准确的中文解释（点明法律含义）。
+2. 用一句话概括每句核心观点、法律义务或裁判要点 point，并在其中体现论证脉络。
+3. 若句中有引注、脚注或法源，在 references 逐一列出，note 用一句话说明「作者在此引用该法源的目的」，并额外说明该法源的核心法律原则或判例要旨（如：确立了什么规则、有什么影响）。
+
+输出格式（严格 JSON，不要输出 JSON 以外的内容）：
+{"sentences":[
+  {"original":"原文（逐字一致）","translation":"译文","terms":[{"term":"英文术语","explain":"中文解释"}],"point":"核心观点/义务","pointConfidence":"high|medium|low","references":[{"title":"出处规范名称","note":"引用目的+法源要旨","type":"case|statute|article|book|other","confidence":"high|medium|low"}]}
+]}
+
+置信度：high=有明确原文依据、medium=合理推断、low=不确定；对引用目的的推断若不确定务必标 low，不要过度自信。`;
+  }
+  return PROMPT_BASE+`
+
+【标准学习模式】
+1. 对每句提取有法律意义的术语 terms，给出精炼准确的中文解释。
+2. 用一句话概括每句核心观点、法律义务或裁判要点 point。
+3. 若句中有引注、脚注或法源，在 references 逐一列出，note 用一句话说明「作者在此引用该法源的目的」（如：作为权威依据/支持论点/提出反例/界定概念/类比推理等）。
+
+输出格式（严格 JSON，不要输出 JSON 以外的内容）：
+{"sentences":[
+  {"original":"原文（逐字一致）","translation":"译文","terms":[{"term":"英文术语","explain":"中文解释"}],"point":"核心观点/义务","pointConfidence":"high|medium|low","references":[{"title":"出处规范名称","note":"引用目的","type":"case|statute|article|book|other","confidence":"high|medium|low"}]}
+]}
+
+置信度：high=有明确原文依据、medium=合理推断、low=不确定；对引用目的的推断若不确定务必标 low，不要过度自信。`;
+}
+
+async function callLLM(blockText, onDelta){
+  state.abortController=new AbortController();
+  const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:state.abortController.signal,body:JSON.stringify({
+    model:state.model, temperature:state.temperature, stream:true,
+    messages:[{role:'system',content:getSystemPrompt(state.depth)+'\n\n目标语言：'+state.lang},{role:'user',content:blockText}],
+  })});
+  if(!resp.ok){
+    const data=await resp.json().catch(()=>({}));
+    if(data.error==='no_api_key') throw new Error('NO_KEY');
+    throw new Error(data.message||(data.error&&data.error.message)||('请求失败('+resp.status+')'));
+  }
+  // 流式读取 SSE，累积 delta
+  const reader=resp.body.getReader();
+  const decoder=new TextDecoder();
+  let buf='', full='';
+  while(true){
+    const {done, value}=await reader.read();
+    if(done) break;
+    buf += decoder.decode(value, {stream:true});
+    const lines=buf.split('\n');
+    buf = lines.pop();
+    for(const line of lines){
+      const t=line.trim();
+      if(!t.startsWith('data:')) continue;
+      const data=t.slice(5).trim();
+      if(data==='[DONE]') continue;
+      try{
+        const j=JSON.parse(data);
+        const delta=j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content;
+        if(delta){ full+=delta; if(onDelta) onDelta(full.length); }
+      }catch(e){}
+    }
+  }
+  if(!full) throw new Error('模型返回为空');
+  return extractJson(full);
+}
+function extractJson(str){
+  let s=str.trim(); const f=s.match(/```(?:json)?\s*([\s\S]*?)```/); if(f) s=f[1].trim();
+  const a=s.indexOf('{'), b=s.lastIndexOf('}'); if(a>=0&&b>a) s=s.slice(a,b+1);
+  return JSON.parse(s);
+}
+
+/* ================= 渲染 ================= */
+let sentenceCounter=0;
+function renderRawText(){
+  const lb=$('#leftBody'), rb=$('#rightBody');
+  const paras=state.cleanedText.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+  lb.innerHTML='';
+  paras.forEach((p,pi)=>{
+    const div=document.createElement('div');
+    div.className='sent';
+    div.innerHTML='<div class="idx">'+(pi+1)+'</div><div class="body"><div class="orig">'+highlight(p)+'</div></div>';
+    lb.appendChild(div);
+  });
+  rb.innerHTML='<div class="empty-hint">点击「开始解读」生成译文与解析</div>';
+  window._sum={terms:[],refs:[],points:[]};
+  $('#summary').style.display='block';
+  showTab('terms');
+}
+function render(){
+  const lb=$('#leftBody'), rb=$('#rightBody');
+  lb.innerHTML=''; rb.innerHTML=''; sentenceCounter=0;
+  const termMap=new Map(), refList=[], pointList=[];
+  for(const seg of state.segments){
+    for(const s of (seg.sentences||[])){
+      const id=sentenceCounter++;
+      const l=document.createElement('div'); l.className='sent'; l.dataset.id=id;
+      l.innerHTML='<div class="idx">'+(id+1)+'</div><div class="body"><div class="orig">'+highlight(s.original)+'</div></div>';
+      l.onclick=()=>activate(id);
+      lb.appendChild(l);
+      const r=document.createElement('div'); r.className='sent'; r.dataset.id=id;
+      let ahtml='<div class="idx">'+(id+1)+'</div><div class="body"><div class="trans">'+esc(s.translation)+'</div><div class="analysis">';
+      if(s.point) ahtml+='<div class="a-block a-point">'+esc(s.point)+confidenceTag(s.pointConfidence)+'</div>';
+      if(s.terms&&s.terms.length){ ahtml+='<div class="a-block"><div class="a-title">术语（点击查看解释）</div>'; for(const t of s.terms) ahtml+='<div class="a-term"><span class="term-chip" data-term="'+esc(t.term)+'" data-explain="'+esc(t.explain)+'">'+esc(t.term)+'</span><span>'+esc(t.explain)+'</span></div>'; ahtml+='</div>'; }
+      if(s.references&&s.references.length){
+        ahtml+='<div class="a-block"><div class="a-title">法源（点击看引用说明与原文）</div>';
+        for(const ref of s.references){
+          const rt=ref.type||'other';
+          ahtml+='<span class="a-ref" data-cite-text="'+esc(ref.title)+'" data-cite-type="'+esc(rt)+'" data-note="'+esc(ref.note||'')+'" data-conf="'+esc(ref.confidence||'')+'">'+esc(ref.title)+'<span class="rtype">'+esc(TYPE_LABEL[rt]||rt)+'</span></span>';
+        }
+        ahtml+='</div>';
+      }
+      ahtml+='</div></div>';
+      r.innerHTML=ahtml;
+      r.onclick=(e)=>{ if(e.target.closest('.a-ref, .term-chip')) return; r.classList.toggle('open'); activate(id,true); if(s.original) locateInPdf(s.original); };
+      rb.appendChild(r);
+      for(const t of (s.terms||[])){ if(!termMap.has(t.term.toLowerCase())) termMap.set(t.term.toLowerCase(),{term:t.term,explain:t.explain}); }
+      for(const ref of (s.references||[])) refList.push({...ref,sid:id+1});
+      if(s.point) pointList.push({sid:id+1,orig:s.original,point:s.point});
+    }
+  }
+  renderSummary(termMap,refList,pointList);
+}
+function activate(id,keepOpen){
+  $$('.sent').forEach(el=>{ const on=el.dataset.id==String(id); el.classList.toggle('active',on); if(on&&!keepOpen) el.scrollIntoView({block:'nearest',behavior:'smooth'}); });
+}
+function renderSummary(termMap,refList,pointList){
+  $('#summary').style.display='block'; window._sum={terms:[...termMap.values()],refs:refList,points:pointList}; showTab('terms');
+}
+function showTab(name){
+  $$('.sum-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  const c=$('#sumContent'); c.innerHTML=''; const d=window._sum||{terms:[],refs:[],points:[]};
+  if(name==='terms'){ if(!d.terms.length){c.innerHTML='<div class="empty-hint">暂无术语</div>';return;} for(const t of d.terms) c.innerHTML+='<div class="s-item"><span class="k">'+esc(t.term)+'</span>　<span class="v">'+esc(t.explain)+'</span></div>'; }
+  else if(name==='refs'){ if(!d.refs.length){c.innerHTML='<div class="empty-hint">暂无参考出处</div>';return;} for(const r of d.refs) c.innerHTML+='<div class="s-item"><span class="v">['+r.sid+'] <span class="a-ref" data-cite-text="'+esc(r.title)+'" data-cite-type="'+esc(r.type||'other')+'">'+esc(r.title)+'<span class="rtype">'+esc(TYPE_LABEL[r.type]||r.type||'other')+'</span></span></span>'+(r.note?'<div style="color:var(--muted);font-size:12px;">'+esc(r.note)+'</div>':'')+'</div>'; }
+  else if(name==='points'){ if(!d.points.length){c.innerHTML='<div class="empty-hint">暂无观点摘要</div>';return;} for(const p of d.points) c.innerHTML+='<div class="s-item"><span class="v"><b>['+p.sid+']</b> '+esc(p.point)+'</span><div style="color:var(--faint);font-size:12px;">'+esc(p.orig.slice(0,120))+'…</div></div>'; }
+  else if(name==='quiz'){ renderQuiz(); }
+}
+
+/* ================= 测验（主动回忆） ================= */
+const QUIZ_PROMPT=`你是一位法律教学专家。基于下面提供的法律文件解读内容，生成 5 道测验题检验学习效果。题目用中文，但保留英文法律术语原文。
+
+题型分配：2 道单选题(mcq)、2 道判断题(tf)、1 道填空题(fill)。
+
+输出严格 JSON（不要输出 JSON 以外的内容）：
+{
+  "questions": [
+    {"type":"mcq","question":"题干","options":["选项A","选项B","选项C","选项D"],"answer":0,"explanation":"一句话解析"},
+    {"type":"tf","question":"判断陈述","answer":true,"explanation":"一句话解析"},
+    {"type":"fill","question":"填空：____（题干用 ____ 表示空）","answer":"答案","explanation":"一句话解析"}
+  ]
+}
+
+解读内容：`;
+
+function quizTypeLabel(t){ return t==='mcq'?'单选':(t==='tf'?'判断':(t==='fill'?'填空':'问答')); }
+function collectSummary(){
+  const termSet=new Set(), refSet=new Set(), pointList=[];
+  for(const seg of state.segments) for(const s of (seg.sentences||[])){
+    if(s.point) pointList.push(s.point);
+    for(const t of (s.terms||[])) if(t.term && !termSet.has(t.term)) termSet.add(t.term);
+    for(const r of (s.references||[])) if(r.title && !refSet.has(r.title)) refSet.add(r.title);
+  }
+  if(!pointList.length && !termSet.size) return '';
+  let txt='术语：'+[...termSet].join('；')+'\n\n';
+  txt+='核心观点/法律义务：\n'+pointList.map((p,i)=>(i+1)+'. '+p).join('\n')+'\n\n';
+  if(refSet.size) txt+='引用出处：'+[...refSet].join('；');
+  return txt;
+}
+async function generateQuiz(){
+  const summary=collectSummary();
+  if(!summary){ toast('请先解读文件','err'); return; }
+  const c=$('#sumContent');
+  c.innerHTML='<div class="quiz-start"><div class="cc-loading"><span class="spinner"></span> 正在生成测验…</div></div>';
+  try{
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:state.model,response_format:{type:'json_object'},messages:[{role:'user',content:QUIZ_PROMPT+'\n\n'+summary}],max_tokens:4000})});
+    const data=await resp.json();
+    if(!resp.ok) throw new Error(data.message||('请求失败('+resp.status+')'));
+    const content=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+    const json=extractJson(content||'{}');
+    state.quiz=json.questions||[];
+    renderQuiz();
+  }catch(e){ c.innerHTML='<div class="quiz-start"><p>测验生成失败：'+esc(e.message)+'</p><button class="btn primary" onclick="generateQuiz()">重试</button></div>'; }
+}
+function renderQuiz(){
+  const c=$('#sumContent');
+  if(!state.quiz || !state.quiz.length){
+    c.innerHTML='<div class="quiz-start"><p>基于解读内容生成测验题，检验你的理解——主动回忆比重复阅读更有效。</p><button class="btn primary" onclick="generateQuiz()">生成测验</button></div>';
+    return;
+  }
+  let h='';
+  state.quiz.forEach((q,i)=>{
+    h+='<div class="quiz-item" data-i="'+i+'"><div class="q-title"><span class="q-no">'+(i+1)+'</span><span class="q-type">'+quizTypeLabel(q.type)+'</span><div>'+esc(q.question)+'</div></div>';
+    if(q.type==='mcq'){ (q.options||[]).forEach((opt,j)=>{ h+='<label class="q-opt"><input type="radio" name="q'+i+'" value="'+j+'"><span>'+esc(opt)+'</span></label>'; }); }
+    else if(q.type==='tf'){ h+='<label class="q-opt"><input type="radio" name="q'+i+'" value="true"><span>正确</span></label><label class="q-opt"><input type="radio" name="q'+i+'" value="false"><span>错误</span></label>'; }
+    else if(q.type==='fill'){ h+='<input class="q-fill" type="text" data-i="'+i+'" placeholder="输入答案">'; }
+    h+='<div class="q-result" data-i="'+i+'" style="display:none;"></div></div>';
+  });
+  h+='<div class="quiz-actions"><button class="btn primary" id="quizSubmit">提交答案</button><button class="btn" id="quizRegen">重新生成</button></div><div class="quiz-score" id="quizScore" style="display:none;"></div>';
+  c.innerHTML=h;
+  $('#quizSubmit').onclick=submitQuiz;
+  $('#quizRegen').onclick=()=>{ state.quiz=null; renderQuiz(); };
+}
+function submitQuiz(){
+  const qs=state.quiz; let score=0, answered=0;
+  qs.forEach((q,i)=>{
+    const res=document.querySelector('.q-result[data-i="'+i+'"]');
+    let user=null, correct=String(q.answer);
+    if(q.type==='mcq' || q.type==='tf'){
+      const sel=document.querySelector('input[name="q'+i+'"]:checked');
+      if(sel){ user=sel.value; answered++; }
+    } else if(q.type==='fill'){
+      const inp=document.querySelector('.q-fill[data-i="'+i+'"]');
+      if(inp && inp.value.trim()){ user=inp.value.trim(); answered++; }
+    }
+    const isCorrect=user!=null && String(user).toLowerCase()===correct.toLowerCase();
+    if(isCorrect) score++;
+    if(res){
+      res.style.display='block'; res.className='q-result '+(isCorrect?'ok':'no');
+      res.innerHTML=(isCorrect?'✓ 正确':'✗ 错误')+'　'+(isCorrect?'':'正确答案：'+esc(correct)+'　')+(q.explanation?'<div style="margin-top:4px;font-weight:400;">'+esc(q.explanation)+'</div>':'');
+    }
+    if(q.type==='mcq'){
+      document.querySelectorAll('.quiz-item[data-i="'+i+'"] .q-opt').forEach((opt,idx)=>{
+        if(String(idx)===correct) opt.classList.add('correct');
+        else if(String(idx)===String(user)) opt.classList.add('wrong');
+      });
+    } else if(q.type==='tf'){
+      document.querySelectorAll('.quiz-item[data-i="'+i+'"] .q-opt').forEach(opt=>{
+        const v=opt.querySelector('input').value;
+        if(v===correct) opt.classList.add('correct');
+        else if(v===String(user)) opt.classList.add('wrong');
+      });
+    }
+  });
+  const sc=$('#quizScore');
+  sc.style.display='block';
+  sc.textContent='得分：'+score+' / '+qs.length+'（'+Math.round(score/qs.length*100)+' 分）';
+  $('#quizSubmit').disabled=true;
+}
+
+/* ================= 主流程 ================= */
+function showEmpty(){ $('#empty').style.display='flex'; $('#workspace').style.display='none'; $('#summary').style.display='none'; }
+function showWorkspace(){ $('#empty').style.display='none'; $('#workspace').style.display='block'; $('#btnExport').disabled=false; }
+async function run(){
+  if(!state.cleanedText.trim()){ toast('请先上传或粘贴文本','err'); return; }
+  if(state.running) return;
+  if(!state.hasKey){ toast('请先在「设置」里填写 API Key','err'); openSettings(); return; }
+  state.running=true; state.stopRequested=false;
+  $('#btnRun').disabled=false; $('#btnRun').textContent='停止解读';
+  $('#progress').style.display='block'; $('#progBar').style.transform='scaleX(0)'; showWorkspace();
+  const blocks=segmentText(state.cleanedText);
+  state.segments=blocks.map(b=>({raw:b,sentences:[]}));
+  $('#rightBody').innerHTML='<div class="empty-hint reading-hint"><span class="spinner"></span><div>正在解读第 1 段…</div></div>';
+  let failed=0;
+  for(let i=0;i<blocks.length;i++){
+    if(state.stopRequested) break;
+    $('#progTxt').textContent='正在解读第 '+(i+1)+' / '+blocks.length+' 段…';
+    try{ const json=await callLLM(blocks[i], (len)=>{ $('#progTxt').textContent='正在解读第 '+(i+1)+' / '+blocks.length+' 段… 已生成 '+len+' 字'; }); state.segments[i].sentences=json.sentences||[]; }
+    catch(e){ if(state.stopRequested) break; failed++; if(e.message==='NO_KEY'){ toast('请先在「设置」里填写 API Key','err'); break; } state.segments[i].sentences=[{original:blocks[i],translation:'该段解读失败：'+e.message,terms:[],point:'',references:[]}]; }
+    render();   // 每段完成立即渲染，译文逐段浮现
+    $('#progBar').style.transform='scaleX('+((i+1)/blocks.length)+')';
+  }
+  state.running=false; state.abortController=null; $('#btnRun').disabled=false; $('#btnRun').textContent='开始解读';
+  $('#progress').style.display='none';
+  toast(state.stopRequested?'已停止解读':'解读完成','ok');
+}
+
+/* ================= 文件解析 ================= */
+async function handleFile(file){
+  const name=file.name.toLowerCase(); state.fileName=file.name;
+  try{
+    if(name.endsWith('.pdf')){
+      if(!window.pdfjsLib) throw new Error('PDF 组件未加载（需联网）');
+      pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER_URL;
+      state.pdfFile=file; state.docType='pdf'; state.pdfTextIndex=null;
+      $('#pdfView').dataset.loaded='';
+      if(state.pdfDoc){ try{ state.pdfDoc.destroy(); }catch(e){} state.pdfDoc=null; }
+      const buf=await file.arrayBuffer();
+      const pdf=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;
+      let out='';
+      for(let i=1;i<=pdf.numPages;i++){ const pg=await pdf.getPage(i); const tc=await pg.getTextContent(); for(const it of tc.items){ if(it.str) out+=it.str+(it.hasEOL?'\n':' '); } out+='\n\n'; }
+      await pdf.destroy();
+      state.rawText=out; state.cleanedText=cleanText(out);
+    }else if(name.endsWith('.docx')||name.endsWith('.doc')){
+      if(!window.mammoth) throw new Error('Word 组件未加载（需联网）');
+      const r=await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()});
+      state.rawText=r.value; state.cleanedText=r.value; state.pdfFile=null; state.docType='text';
+    }else{
+      state.rawText=await file.text(); state.cleanedText=state.rawText; state.pdfFile=null; state.docType='text';
+    }
+    if(!state.cleanedText.trim()){ toast('未能提取到文本','err'); return; }
+    toast('已载入「'+file.name+'」('+state.cleanedText.length+' 字符)','ok');
+    readyToRun();
+  }catch(e){ toast('解析失败：'+e.message,'err'); }
+}
+function readyToRun(){ showWorkspace(); $('#btnRun').disabled=false; renderRawText(); if(state.docType==='pdf'){ $$('.viewtab').forEach(t=>t.style.display=''); } else { $$('.viewtab').forEach(t=>t.style.display='none'); } }
+
+/* ================= PDF 原件渲染 ================= */
+function mulTransform(m1,m2){
+  return [ m1[0]*m2[0]+m1[2]*m2[1], m1[1]*m2[0]+m1[3]*m2[1],
+           m1[0]*m2[2]+m1[2]*m2[3], m1[1]*m2[2]+m1[3]*m2[3],
+           m1[0]*m2[4]+m1[2]*m2[5]+m1[4], m1[1]*m2[4]+m1[3]*m2[5]+m1[5] ];
+}
+async function renderPdfOriginal(){
+  const v=$('#pdfView');
+  if(!state.pdfFile){ v.innerHTML='<div class="empty-hint">当前不是 PDF 文件，无原件视图</div>'; return; }
+  v.innerHTML='<div class="empty-hint"><span class="spinner"></span> 正在渲染原件…</div>';
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc=PDF_WORKER_URL;
+    const buf=await state.pdfFile.arrayBuffer();
+    if(state.pdfDoc){ try{ state.pdfDoc.destroy(); }catch(e){} }
+    const pdf=await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+    state.pdfDoc=pdf;
+    v.innerHTML='';
+    state.pdfTextIndex=[];
+    const first=await pdf.getPage(1);
+    const baseVp=first.getViewport({scale:1});
+    const scale=Math.min(2, Math.max(0.8, (v.clientWidth-36)/baseVp.width));
+    for(let i=1;i<=pdf.numPages;i++){
+      const pg=await pdf.getPage(i); const vp=pg.getViewport({scale});
+      const wrap=document.createElement('div'); wrap.className='pdf-page';
+      const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
+      const ctx=cv.getContext('2d');
+      await pg.render({canvasContext:ctx,viewport:vp}).promise;
+      wrap.appendChild(cv);
+      const tc=await pg.getTextContent();
+      const layer=document.createElement('div'); layer.className='pdf-text-layer';
+      layer.style.width=vp.width+'px'; layer.style.height=vp.height+'px';
+      const spans=[];
+      for(const it of tc.items){
+        if(!it.str) continue;
+        const tx=mulTransform(vp.transform, it.transform);
+        const h=Math.hypot(tx[2],tx[3])||10;
+        const sp=document.createElement('span');
+        sp.textContent=it.str;
+        sp.style.left=tx[4]+'px'; sp.style.top=(tx[5]-h)+'px'; sp.style.fontSize=h+'px';
+        layer.appendChild(sp); spans.push(sp);
+      }
+      wrap.appendChild(layer);
+      const pn=document.createElement('div'); pn.className='page-no'; pn.textContent='第 '+i+' 页 / 共 '+pdf.numPages+' 页';
+      wrap.appendChild(pn);
+      v.appendChild(wrap);
+      state.pdfTextIndex.push({ pageNum:i, fullText: tc.items.map(it=>it.str||'').join(''), spans });
+    }
+    v.dataset.loaded='1';
+  }catch(e){ v.innerHTML='<div class="empty-hint">原件渲染失败：'+esc(e.message)+'</div>'; }
+}
+function normText(s){ return (s||'').replace(/\s+/g,'').toLowerCase(); }
+function locateInPdf(originalText){
+  if(state.docType!=='pdf') return;
+  if(!state.pdfTextIndex || !state.pdfTextIndex.length) return;
+  document.querySelectorAll('.pdf-text-layer span.hl').forEach(sp=>sp.classList.remove('hl'));
+  const needle=normText(originalText).slice(0,80);
+  if(!needle) return;
+  for(const pg of state.pdfTextIndex){
+    const hay=normText(pg.fullText);
+    const pos=hay.indexOf(needle);
+    if(pos<0) continue;
+    const end=pos+needle.length;
+    let acc=0; const hits=[];
+    for(const sp of pg.spans){
+      const len=normText(sp.textContent).length;
+      if(len && acc+len>pos && acc<end){ sp.classList.add('hl'); hits.push(sp); }
+      acc+=len;
+    }
+    if(hits.length){
+      $$('.viewtab').forEach(x=>x.classList.toggle('active', x.dataset.view==='pdf'));
+      $('#leftBody').style.display='none';
+      $('#pdfView').style.display='block';
+      hits[0].scrollIntoView({block:'center', behavior:'smooth'});
+      return;
+    }
+  }
+}
+
+/* ================= 导出 ================= */
+function buildRows(){ const rows=[]; let i=0; for(const seg of state.segments) for(const s of (seg.sentences||[])) rows.push({...s,n:++i}); return rows; }
+function exportWord(){
+  const rows=buildRows(); if(!rows.length){toast('暂无内容','err');return;}
+  let h='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body><h2>LegalReader 解读件</h2><table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;width:100%;font-size:11pt;"><tr style="background:#eef"><th>#</th><th>原文</th><th>译文</th><th>观点/义务</th><th>术语</th></tr>';
+  for(const r of rows) h+='<tr><td>'+r.n+'</td><td>'+esc(r.original)+'</td><td>'+esc(r.translation)+'</td><td>'+esc(r.point||'')+'</td><td>'+esc((r.terms||[]).map(t=>t.term+'：'+t.explain).join('；'))+'</td></tr>';
+  h+='</table></body></html>'; downloadBlob(new Blob(['\ufeff'+h],{type:'application/msword'}),'解读件.doc');
+}
+function exportHtml(){
+  const rows=buildRows(); if(!rows.length){toast('暂无内容','err');return;}
+  let h='<!DOCTYPE html><html><head><meta charset="utf-8"><title>LegalReader 解读件</title><style>body{font-family:sans-serif;max-width:960px;margin:24px auto;line-height:1.7}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:8px;vertical-align:top}th{background:#eef}</style></head><body><h1>LegalReader 双语对照解读件</h1><table><tr><th>#</th><th>原文</th><th>译文</th><th>观点/义务</th><th>术语</th></tr>';
+  for(const r of rows) h+='<tr><td>'+r.n+'</td><td>'+highlight(r.original)+'</td><td>'+esc(r.translation)+'</td><td>'+esc(r.point||'')+'</td><td>'+esc((r.terms||[]).map(t=>t.term+'：'+t.explain).join('；'))+'</td></tr>';
+  h+='</table></body></html>'; downloadBlob(new Blob([h],{type:'text/html;charset=utf-8'}),'解读件.html');
+}
+function exportMd(){
+  const rows=buildRows(); if(!rows.length){toast('暂无内容','err');return;}
+  let md='# LegalReader 解读件\n\n';
+  for(const r of rows){ md+='## '+r.n+'. '+r.original+'\n\n> **译文**：'+r.translation+'\n>'; if(r.point) md+='\n> **观点/义务**：'+r.point; if(r.terms&&r.terms.length) md+='\n> **术语**：'+r.terms.map(t=>t.term+'（'+t.explain+'）').join('；'); md+='\n\n'; }
+  downloadBlob(new Blob([md],{type:'text/markdown;charset=utf-8'}),'解读件.md');
+}
+function exportJson(){ const rows=buildRows(); if(!rows.length){toast('暂无内容','err');return;} downloadBlob(new Blob([JSON.stringify(rows,null,2)],{type:'application/json;charset=utf-8'}),'解读件.json'); }
+function showExportMenu(){
+  const m=document.createElement('div'); m.style.cssText='position:fixed;z-index:60;background:#fff;border:1px solid #d1d5db;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.15);padding:6px;';
+  [['导出 Word 文档','exportWord'],['导出双语 HTML','exportHtml'],['导出 Markdown','exportMd'],['导出 JSON 数据','exportJson']].forEach(([t,f])=>{
+    const b=document.createElement('button'); b.textContent=t; b.style.cssText='display:block;width:100%;text-align:left;padding:8px 14px;border:none;background:none;font-size:13px;border-radius:6px;';
+    b.onmouseover=()=>b.style.background='#f3f4f6'; b.onmouseout=()=>b.style.background='none'; b.onclick=()=>{m.remove();window[f]();}; m.appendChild(b);
+  });
+  document.body.appendChild(m); const r=$('#btnExport').getBoundingClientRect(); m.style.top=(r.bottom+6)+'px'; m.style.left=r.left+'px';
+  setTimeout(()=>document.addEventListener('click',function h(e){ if(!m.contains(e.target)){m.remove();document.removeEventListener('click',h);} }),0);
+}
+
+/* ================= 设置 ================= */
+function setConn(on){
+  state.hasKey=on; const c=$('#connStatus');
+  c.classList.toggle('on',on); $('#connText').textContent=on?'已连接':'未配置';
+  const b=$('#setBanner'); b.className='conn-banner '+(on?'ok':'off'); $('#setBannerText').textContent=on?'✓ 已连接 · 可正常解读':'尚未配置 API Key';
+  $('#keyHint').textContent=on?'已配置。如需更换，输入新 Key 后点「保存」。':'Key 仅保存在本机 config.json，不经过任何第三方。';
+}
+async function loadSettings(){
+  try{ const c=await (await fetch('/api/config')).json(); $('#setModel').value=c.model||'deepseek-chat'; $('#setBase').value=c.base_url||'https://api.deepseek.com/chat/completions'; state.model=c.model||'deepseek-chat'; state.temperature=c.temperature!=null?c.temperature:0.3; state.depth=c.depth||'standard'; $('#setDepth').value=state.depth; setConn(c.has_key); $('#clHint').textContent=c.has_courtlistener_token?'已配置。判例引注将精确解析到原文。':'用于把判例引注精确解析到原文。不填也能用，判例将显示为搜索链接。'; }
+  catch(e){}
+}
+function openSettings(){ $('#settings').style.display='block'; $('#settings-mask').style.display='block'; $('#setStatus').textContent=''; }
+function closeSettings(){ $('#settings').style.display='none'; $('#settings-mask').style.display='none'; $('#setStatus').textContent=''; }
+async function saveSettings(){
+  const body={model:$('#setModel').value,base_url:$('#setBase').value,temperature:state.temperature,depth:$('#setDepth').value};
+  const key=$('#setKey').value.trim(); if(key) body.api_key=key;
+  const clToken=$('#setClToken').value.trim(); if(clToken) body.courtlistener_token=clToken;
+  if($('#setLang').value.trim()) state.lang=$('#setLang').value.trim();
+  const c=await (await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+  state.model=c.model; state.temperature=c.temperature!=null?c.temperature:0.3; state.depth=c.depth||'standard';
+  $('#setKey').value=''; $('#setClToken').value='';
+  $('#clHint').textContent=c.has_courtlistener_token?'已配置。判例引注将精确解析到原文。':'用于把判例引注精确解析到原文。不填也能用，判例将显示为搜索链接。';
+  if(c.has_key){
+    setConn(true);
+    $('#setStatus').textContent='';
+    toast('设置已保存','ok');
+    // 自动测试连接
+    const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:c.model,messages:[{role:'user',content:'ok'}],max_tokens:10})});
+    if(resp.ok){ toast('已保存并连接成功 ✓','ok'); closeSettings(); }
+    else { toast('已保存，但连接测试失败（Key 可能无效）','err'); $('#setBannerText').textContent='已保存但连接失败，请检查 Key'; $('#setBanner').className='conn-banner off'; }
+  } else { setConn(false); toast('已保存（尚未配置 Key）','err'); }
+}
+async function testConnection(){
+  const key=$('#setKey').value.trim(); const c=await (await fetch('/api/config')).json();
+  if(!key&&!c.has_key){ $('#setStatus').textContent='请先填写 API Key'; return; }
+  if(key){ await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})}); }
+  $('#setStatus').textContent='测试中…';
+  try{ const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:$('#setModel').value,messages:[{role:'user',content:'请回复"OK"两个字'}],max_tokens:20})}); const d=await resp.json(); if(resp.ok){ $('#setStatus').textContent='✓ 连接成功'; setConn(true); } else { $('#setStatus').textContent='连接失败：'+(d.message||d.error?.message||resp.status); } }catch(e){ $('#setStatus').textContent='连接失败：'+e.message; }
+}
+
+/* ================= 示例文本 ================= */
+const SAMPLE=`The Foreign Corrupt Practices Act of 1977, as amended, 15 U.S.C. § 78dd-1 et seq. ("FCPA"), was enacted for the purpose of making it unlawful for certain classes of persons and entities to make payments to foreign government officials to assist in obtaining or retaining business.
+
+The anti-bribery provisions prohibit the willful use of the mails or any means or instrumentality of interstate commerce corruptly in furtherance of any offer, payment, promise to pay, or authorization of the payment of any money, or offer, gift, promise to give, or authorization of the giving of anything of value to any foreign official.
+
+The Supreme Court has long recognized that a corporation may be treated as a "person" for purposes of certain statutes. See, e.g., Citizens United v. Federal Election Commission, 558 U.S. 310 (2010); Burwell v. Hobby Lobby Stores, Inc., 573 U.S. 682 (2014).
+
+Under the European Union's General Data Protection Regulation (Regulation (EU) 2016/679), the processing of personal data is lawful only if and to the extent that at least one of the legal bases set out in Article 6 applies.`;
+
+/* ================= 事件绑定 ================= */
+$('#dropzone').addEventListener('click',()=>$('#fileInput').click());
+$('#btnOpen').addEventListener('click',()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change',e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); e.target.value=''; });
+['dragover','dragenter'].forEach(ev=>$('#dropzone').addEventListener(ev,e=>{e.preventDefault();$('#dropzone').classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>$('#dropzone').addEventListener(ev,e=>{e.preventDefault();$('#dropzone').classList.remove('drag');}));
+$('#dropzone').addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+$('#btnPaste').addEventListener('click',()=>{ $('#paste').style.display='block'; $('#pasteActions').style.display='block'; $('#paste').focus(); });
+$('#btnPasteRun').addEventListener('click',()=>{ state.rawText=$('#paste').value; state.cleanedText=$('#paste').value; state.pdfFile=null; state.docType='text'; if(!state.cleanedText.trim()){toast('请粘贴文本','err');return;} readyToRun(); });
+$('#btnPasteCancel').addEventListener('click',()=>{ $('#paste').style.display='none'; $('#pasteActions').style.display='none'; });
+$('#btnSample').addEventListener('click',()=>{ state.rawText=SAMPLE; state.cleanedText=SAMPLE; state.pdfFile=null; state.docType='text'; readyToRun(); toast('已载入示例文本'); });
+$('#btnRun').addEventListener('click',()=>{
+  if(state.running){ state.stopRequested=true; if(state.abortController) state.abortController.abort(); return; }
+  run();
+});
+$('#btnExport').addEventListener('click',showExportMenu);
+$('#btnSettings').addEventListener('click',openSettings);
+$('#connStatus').addEventListener('click',openSettings);
+$('#btnCloseSet').addEventListener('click',closeSettings);
+$('#settings-mask').addEventListener('click',closeSettings);
+$('#btnSaveSet').addEventListener('click',saveSettings);
+$('#btnTestSet').addEventListener('click',testConnection);
+// 底部汇总 tab（事件委托，更稳健）
+document.querySelector('.sum-tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.sum-tab');
+  if(t) showTab(t.dataset.tab);
+});
+
+// 视图切换（对照 / PDF 原件）
+$$('.viewtab').forEach(t=>t.addEventListener('click',()=>{
+  $$('.viewtab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  const v=t.dataset.view;
+  $('#leftBody').style.display=v==='compare'?'block':'none';
+  $('#pdfView').style.display=v==='pdf'?'block':'none';
+  if(v==='pdf') renderPdfOriginal();
+}));
+
+// 术语/引注点击 → 解析卡片（事件委托）
+document.addEventListener('click',e=>{
+  const term=e.target.closest('.term-chip');
+  if(term){ e.preventDefault(); e.stopPropagation(); openTermCard(term.dataset.term, term.dataset.explain, e.clientX, e.clientY); return; }
+  const el=e.target.closest('.cite, .a-ref');
+  if(el){ e.preventDefault(); e.stopPropagation(); openCitationCard(el.dataset.citeText, el.dataset.citeType, e.clientX, e.clientY, el.dataset.note, el.dataset.conf); return; }
+  if(!e.target.closest('#citeCard')){ $('#citeCard').style.display='none'; }
+});
+
+// 底部 Sheet 拖拽（苹果 iOS 风：跟手 + 松手吸附档位）
+(function(){
+  const summary=$('#summary'), handle=$('#summaryHandle');
+  if(!summary || !handle) return;
+  const SNAPS=[0.3, 0.55, 0.85];
+  let dragging=null;
+  function onDown(e){
+    dragging={startY:e.clientY, startH:summary.getBoundingClientRect().height};
+    summary.classList.add('dragging');
+    e.preventDefault();
+  }
+  function onMove(e){
+    if(!dragging) return;
+    const dy=dragging.startY-e.clientY;
+    const vh=window.innerHeight;
+    summary.style.height=Math.max(vh*0.2, Math.min(vh*0.9, dragging.startH+dy))+'px';
+  }
+  function onUp(){
+    if(!dragging) return;
+    dragging=null;
+    summary.classList.remove('dragging');
+    const h=summary.getBoundingClientRect().height;
+    const vh=window.innerHeight;
+    let best=SNAPS[0], bd=Infinity;
+    for(const r of SNAPS){ const d=Math.abs(h-r*vh); if(d<bd){bd=d;best=r;} }
+    summary.style.height=(best*vh)+'px';
+  }
+  handle.addEventListener('mousedown', onDown);
+  handle.addEventListener('touchstart', onDown, {passive:false});
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchend', onUp);
+})();
+
+// 键盘快捷键（工具类界面的效率）
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ $('#citeCard').style.display='none'; closeSettings(); }
+  if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); if(!state.running && !$('#btnRun').disabled) run(); }
+});
+
+loadSettings();
+</script>
+</body>
+</html>
